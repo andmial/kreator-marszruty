@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kreator marszruty CNC</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box}body,p,h2{margin:0}[hidden]{display:none!important}
+/* Layout: drzewo marszruty | ramka canvasu z pionowym flow + pasek asystenta | panel właściwości. Jeden, ciemny świat wizualny wg Figmy „Top Secret” (Beloud / Sphere). */
+:root {
+  color-scheme: dark;
+  --bg: #111111;
+  --side: #181818;
+  --frame: #141414;
+  --frame-head: #1c1c1c;
+  --card: #1f1f1f;
+  --card-edge: #2b2b2b;
+  --line: #3d3d3d;
+  --dot: #262626;
+  --hover: #232323;
+  --row-sel: #272727;
+  --ctl: #2a2a2a;
+  --ctl-hover: #323232;
+  --fg: #ececec;
+  --fg-2: #a3a3a3;
+  --fg-3: #6e6e6e;
+  --blue: #2b8cf0;
+  --link: #6ab3ff;
+  --auto: #43cf95;
+  --pill-trig-bg: #15324f; --pill-trig-fg: #a9d1fb;
+  --pill-bg: #2a2a2a; --pill-fg: #d2d2d2;
+  --warn: #f5a04b; --warn-bg: #36281a;
+  --crit: #f2555a; --crit-bg: #3a1b1d;
+  --ok: #43cf95;
+  --white: #f4f4f4; --on-white: #111111;
+  --t-setup-bg: #18324d; --t-setup-fg: #6cb2ff;
+  --t-rough-bg: #3a2c12; --t-rough-fg: #f2b54e;
+  --t-finish-bg: #2a2350; --t-finish-fg: #a78bfa;
+  --t-feature-bg: #173a2b; --t-feature-fg: #4ade80;
+  --t-manual-bg: #313131; --t-manual-fg: #cfcfcf;
+  --t-coop-bg: #3a2219; --t-coop-fg: #fb8a55;
+  --t-qc-bg: #14353a; --t-qc-fg: #5cd3e0;
+  --t-part-bg: #3a3a3a; --t-part-fg: #ededed;
+  --sh-card: 0 2px 4px #0000001f, 0 4px 20px #00000014, inset 0 0 0 1px #ffffff0a, inset 0 1px 1px #ffffff14;
+  --sh-pop: 0 4px 12px #0000003d, 0 4px 20px #00000014, inset 0 0 0 1px #ffffff0f;
+  --font: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --s-3xs: 2px; --s-2xs: 4px; --s-xs: 6px; --s-sm: 8px; --s-md: 12px; --s-lg: 16px; --s-xl: 24px; --s-2xl: 40px;
+  --r-sm: 6px; --r-md: 8px; --r-lg: 12px;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 13px; line-height: 20px; -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+svg.lucide { width: 16px; height: 16px; stroke-width: 1.6; flex: none; }
+
+.app { height: 100%; display: grid; grid-template-rows: 48px minmax(0, 1fr); }
+
+/* ── Top ─────────────────────────── */
+.top { display: flex; align-items: center; gap: var(--s-md); border-bottom: 1px solid var(--card-edge); background: var(--side);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); min-width: 0; }
+.logo { width: 24px; height: 24px; border-radius: var(--r-sm); background: var(--white); color: var(--on-white); display: grid; place-items: center; flex: none; }
+.logo svg { width: 14px; height: 14px; }
+.crumbs { display: flex; align-items: center; gap: var(--s-xs); min-width: 0; color: var(--fg-2); white-space: nowrap; overflow: hidden; }
+.crumbs .seg { display: inline-flex; align-items: center; gap: var(--s-xs); }
+.crumbs .badge { width: 18px; height: 18px; border-radius: 5px; background: #c6f432; color: #111; font-size: 11px; font-weight: 600; display: grid; place-items: center; }
+.crumbs .chev { color: var(--fg-3); }
+.crumbs .cur { color: var(--fg); }
+.spacer { flex: 1; }
+.kpis { display: flex; gap: var(--s-xl); white-space: nowrap; }
+.kpi { display: flex; align-items: baseline; gap: var(--s-xs); }
+.kpi span { color: var(--fg-3); font-size: 12px; }
+.kpi b { font-family: var(--mono); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+/* ── Body ────────────────────────── */
+.body { min-height: 0; display: grid; grid-template-columns: 280px minmax(0, 1fr) 336px; }
+.side { background: var(--side); border-right: 1px solid var(--card-edge); overflow-y: auto; min-height: 0; }
+.props { background: var(--side); border-left: 1px solid var(--card-edge); overflow-y: auto; min-height: 0; }
+
+.sec { border-bottom: 1px solid var(--card-edge); padding: var(--s-md) var(--s-sm); display: flex; flex-direction: column; gap: var(--s-3xs); }
+.sec-h { display: flex; align-items: center; justify-content: space-between; padding: var(--s-xs) var(--s-sm) var(--s-sm); font-weight: 500; color: var(--fg); }
+.sec-h small { color: var(--fg-3); font-weight: 400; font-size: 12px; }
+.row { display: flex; align-items: center; gap: var(--s-sm); height: 30px; padding: 0 var(--s-sm); border-radius: var(--r-md); border: 0; background: transparent; width: 100%; text-align: left; color: var(--fg); }
+.row:hover { background: var(--hover); }
+.row.sel { background: var(--row-sel); }
+.row .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .ic { color: var(--fg-2); display: flex; }
+.row.child { padding-left: 32px; color: var(--fg-2); }
+.row.child.sel { color: var(--fg); }
+.row .no { font-family: var(--mono); font-size: 11px; color: var(--fg-3); }
+.dot { width: 6px; height: 6px; border-radius: 99px; flex: none; }
+.dot.ok { background: var(--ok); } .dot.review { background: var(--warn); } .dot.blocked { background: var(--crit); } .dot.none { background: var(--fg-3); }
+.lib { cursor: grab; }
+.lib:active { cursor: grabbing; }
+.lib .grip { color: var(--fg-3); opacity: 0; display: flex; }
+.lib:hover .grip { opacity: 1; }
+.tile { width: 24px; height: 24px; border-radius: var(--r-sm); display: grid; place-items: center; flex: none; }
+.tile svg { width: 14px; height: 14px; }
+.tile.sm { width: 20px; height: 20px; border-radius: 5px; }
+.tile.sm svg { width: 12px; height: 12px; }
+.t-setup { background: var(--t-setup-bg); color: var(--t-setup-fg); }
+.t-rough { background: var(--t-rough-bg); color: var(--t-rough-fg); }
+.t-finish { background: var(--t-finish-bg); color: var(--t-finish-fg); }
+.t-feature { background: var(--t-feature-bg); color: var(--t-feature-fg); }
+.t-manual { background: var(--t-manual-bg); color: var(--t-manual-fg); }
+.t-coop { background: var(--t-coop-bg); color: var(--t-coop-fg); }
+.t-qc { background: var(--t-qc-bg); color: var(--t-qc-fg); }
+.t-part { background: var(--t-part-bg); color: var(--t-part-fg); }
+.grp-h { font-size: 11px; color: var(--fg-3); padding: var(--s-sm) var(--s-sm) var(--s-2xs); }
+.tpl { display: flex; flex-direction: column; gap: 0; padding: var(--s-sm); border-radius: var(--r-md); border: 0; background: transparent; text-align: left; width: 100%; }
+.tpl:hover { background: var(--hover); }
+.tpl small { color: var(--fg-3); font-size: 12px; line-height: 16px; }
+
+/* ── Canvas column ───────────────── */
+.stage { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: var(--s-md); padding: var(--s-xl) var(--s-xl) var(--s-md); background: var(--bg); }
+.frame { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--s-sm); max-width: 760px; width: 100%; margin: 0 auto; }
+.frame-h { display: flex; align-items: center; gap: var(--s-sm); background: var(--frame-head); border-radius: var(--r-lg); padding: var(--s-sm) var(--s-md); box-shadow: inset 0 0 0 1px #ffffff08; min-width: 0; }
+.frame-h .ic { color: var(--fg-2); display: flex; }
+.frame-h b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.frame-h .rec { width: 6px; height: 6px; border-radius: 9px; }
+.legend { display: flex; gap: var(--s-md); color: var(--fg-3); font-size: 12px; white-space: nowrap; }
+.legend span { display: inline-flex; align-items: center; gap: var(--s-2xs); }
+.legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.canvas { min-height: 0; overflow: auto; border-radius: var(--r-lg); background-color: var(--frame); background-image: radial-gradient(var(--dot) 1px, transparent 1px); background-size: 14px 14px; box-shadow: inset 0 0 0 1px #ffffff08; }
+.flow { display: flex; flex-direction: column; align-items: center; padding: var(--s-2xl) var(--s-lg) 80px; }
+
+.step { width: min(400px, 100%); display: flex; flex-direction: column; align-items: center; gap: var(--s-sm); position: relative; }
+.pill { font-size: 12px; line-height: 20px; padding: 0 var(--s-sm); border-radius: var(--r-sm); background: var(--pill-bg); color: var(--pill-fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pill.trig { background: var(--pill-trig-bg); color: var(--pill-trig-fg); }
+.pill.setup { background: var(--t-setup-bg); color: var(--t-setup-fg); }
+.pill.bad { background: var(--crit-bg); color: var(--crit); }
+.card { width: 100%; background: var(--card); border-radius: var(--r-lg); box-shadow: var(--sh-card); text-align: left; border: 0; padding: 0; display: block; cursor: pointer; transition: box-shadow .15s ease, opacity .15s ease; }
+.card:hover { box-shadow: var(--sh-card), 0 0 0 1px #ffffff1c; }
+.card.sel { box-shadow: 0 0 0 1.5px var(--blue), var(--sh-card); }
+.card.bad { box-shadow: 0 0 0 1px var(--crit), var(--sh-card); }
+.card.bad.sel { box-shadow: 0 0 0 1.5px var(--crit), var(--sh-card); }
+.card.dragging { opacity: .35; }
+.card-h { display: flex; align-items: center; gap: var(--s-md); padding: var(--s-md) var(--s-md) var(--s-md) var(--s-lg); min-height: 56px; }
+.card-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-2); }
+.card-t b { color: var(--fg); font-weight: 500; }
+.time { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--fg-2); font-size: 12px; flex: none; }
+.plus { width: 24px; height: 24px; border-radius: var(--r-sm); border: 0; background: transparent; color: var(--fg-2); display: grid; place-items: center; flex: none; }
+.plus:hover, .plus[aria-expanded="true"] { background: var(--ctl); color: var(--fg); }
+.card-b { border-top: 1px solid var(--card-edge); padding: var(--s-md) var(--s-lg); color: var(--fg-2); display: flex; flex-direction: column; gap: var(--s-sm); }
+.card-b p { line-height: 20px; }
+.v-set { color: var(--link); }
+.v-auto { color: var(--auto); }
+.flag { display: flex; gap: var(--s-xs); align-items: flex-start; font-size: 12px; line-height: 16px; }
+.flag svg { width: 14px; height: 14px; margin-top: 1px; }
+.flag.review { color: var(--warn); } .flag.blocked { color: var(--crit); } .flag.info { color: var(--fg-3); }
+.grip-h { position: absolute; left: -28px; top: 50%; color: var(--fg-3); opacity: 0; cursor: grab; display: flex; }
+.step:hover .grip-h { opacity: 1; }
+
+.conn { position: relative; width: min(400px, 100%); height: 64px; display: flex; justify-content: center; }
+.conn::before { content: ""; position: absolute; top: 8px; bottom: 12px; left: 50%; width: 1px; background: var(--line); }
+.conn::after { content: ""; position: absolute; bottom: 6px; left: calc(50% - 4px); border: 4px solid transparent; border-top: 6px solid var(--line); border-bottom: 0; }
+body.is-dragging .conn { height: 80px; }
+.conn.over::before, .conn.over::after { opacity: 0; }
+.conn.over .drop { display: grid; }
+.drop { display: none; position: absolute; inset: 10px 0; border: 1px dashed var(--blue); border-radius: var(--r-lg); background: #2b8cf014; color: var(--link); font-size: 12px; place-items: center; }
+
+.menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 296px; max-width: calc(100vw - 32px); max-height: 360px; overflow-y: auto; background: var(--frame-head); border-radius: var(--r-lg); box-shadow: var(--sh-pop); padding: var(--s-xs); }
+.menu .row { height: 32px; }
+.menu .row small { color: var(--fg-3); font-size: 12px; }
+
+.empty { width: min(560px, 100%); display: flex; flex-direction: column; align-items: center; gap: var(--s-sm); padding: var(--s-2xl) var(--s-lg); text-align: center; position: relative; }
+.empty .tile { width: 32px; height: 32px; }
+.empty b { font-weight: 500; }
+.empty p { color: var(--fg-2); }
+
+/* assistant bar */
+.ask { max-width: 760px; width: 100%; margin: 0 auto; background: #0e0e0e; border-radius: var(--r-lg); box-shadow: var(--sh-pop); overflow: hidden; }
+.ask-crumb { display: flex; align-items: center; gap: var(--s-2xs); color: var(--fg-3); font-size: 12px; padding: var(--s-sm) var(--s-md); border-bottom: 1px solid #1f1f1f; white-space: nowrap; overflow: hidden; }
+.ask-crumb svg { width: 12px; height: 12px; }
+.ask-b { display: flex; align-items: center; gap: var(--s-sm); flex-wrap: wrap; padding: var(--s-md); }
+.orb { width: 18px; height: 18px; border-radius: 99px; flex: none; background: conic-gradient(from 200deg, #6d5bff, #b06cff, #2b8cf0, #6d5bff); -webkit-mask: radial-gradient(circle, transparent 5px, #000 6px); mask: radial-gradient(circle, transparent 5px, #000 6px); }
+.ask-t { color: var(--fg-2); margin-right: var(--s-xs); }
+.chip { display: inline-flex; align-items: center; gap: var(--s-xs); height: 28px; padding: 0 var(--s-sm); border-radius: var(--r-md); border: 0; background: var(--ctl); color: var(--fg); font-size: 12px; white-space: nowrap; max-width: 100%; }
+.chip:hover { background: var(--ctl-hover); }
+.chip svg { width: 14px; height: 14px; color: var(--fg-2); }
+.chip .x { margin-left: var(--s-2xs); color: var(--fg-3); display: flex; }
+.chip .x:hover { color: var(--fg); }
+.chip-lbl { overflow: hidden; text-overflow: ellipsis; }
+.ask-note { text-align: center; color: var(--fg-3); font-size: 12px; }
+
+/* ── Properties ──────────────────── */
+.p-head { display: flex; align-items: center; gap: var(--s-sm); padding: var(--s-md) var(--s-lg); border-bottom: 1px solid var(--card-edge); position: sticky; top: 0; background: var(--side); z-index: 2; }
+.p-head input { flex: 1; min-width: 0; background: transparent; border: 0; color: var(--link); font-weight: 500; font-size: 14px; padding: var(--s-2xs) var(--s-xs); border-radius: var(--r-sm); }
+.p-head input:hover { background: var(--hover); }
+.p-head input:focus { outline: none; background: var(--ctl); }
+.p-head .static { flex: 1; color: var(--link); font-weight: 500; font-size: 14px; }
+.icon-btn { width: 28px; height: 28px; border-radius: var(--r-sm); border: 0; background: transparent; color: var(--fg-2); display: grid; place-items: center; flex: none; }
+.icon-btn:hover { background: var(--hover); color: var(--fg); }
+.icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+.p-sec { padding: var(--s-lg); border-bottom: 1px solid var(--card-edge); display: flex; flex-direction: column; gap: var(--s-sm); }
+.p-sec > b { font-weight: 500; margin-bottom: var(--s-xs); display: flex; justify-content: space-between; align-items: center; }
+.p-sec > b small { color: var(--fg-3); font-weight: 400; font-size: 12px; }
+.prow { display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: center; gap: var(--s-sm); }
+.prow label { color: var(--fg-2); }
+.ctl { position: relative; display: flex; align-items: center; min-width: 0; }
+.ctl input, .ctl select { width: 100%; height: 28px; border: 0; border-radius: var(--r-sm); background: var(--ctl); padding: 0 var(--s-sm); font-family: var(--mono); font-size: 12px; color: var(--fg); }
+.ctl select { font-family: var(--font); appearance: none; padding-right: 28px; cursor: pointer; }
+.ctl input.txt { font-family: var(--font); }
+.ctl input:hover, .ctl select:hover { background: var(--ctl-hover); }
+.ctl input:focus, .ctl select:focus { outline: none; box-shadow: 0 0 0 1.5px var(--blue); }
+.ctl input::placeholder { color: var(--auto); opacity: .85; }
+.ctl input.set { color: var(--link); }
+.ctl .unit { position: absolute; right: var(--s-sm); color: var(--fg-3); font-size: 11px; pointer-events: none; }
+.ctl input.has-unit { padding-right: 48px; }
+.ctl .chev { position: absolute; right: var(--s-xs); pointer-events: none; color: var(--fg-2); display: flex; }
+.ctl .chev svg { width: 14px; height: 14px; }
+.hint { color: var(--fg-3); font-size: 12px; line-height: 16px; }
+.kv { display: flex; justify-content: space-between; gap: var(--s-md); }
+.kv span:first-child { color: var(--fg-2); }
+.kv span:last-child { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.kv.big span:last-child { font-size: 18px; line-height: 24px; color: var(--fg); }
+.btns { display: flex; flex-wrap: wrap; gap: var(--s-sm); }
+.btn { height: 28px; padding: 0 var(--s-md); border-radius: var(--r-sm); border: 0; background: var(--ctl); color: var(--fg); display: inline-flex; align-items: center; gap: var(--s-xs); font-size: 12px; font-weight: 500; }
+.btn:hover { background: var(--ctl-hover); }
+.btn:disabled { opacity: .35; cursor: not-allowed; }
+.btn.white { background: var(--white); color: var(--on-white); }
+.btn.white:hover { opacity: .9; }
+.btn.danger { background: transparent; color: var(--crit); }
+.btn.danger:hover { background: var(--crit-bg); }
+.btn svg { width: 14px; height: 14px; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tbl td { padding: var(--s-xs) 0; border-bottom: 1px solid var(--card-edge); vertical-align: top; }
+.tbl td.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: var(--s-sm); }
+.tbl td.no { font-family: var(--mono); color: var(--fg-3); width: 44px; }
+.tbl tr.go { cursor: pointer; }
+.tbl tr.go:hover td { background: var(--hover); }
+.tbl tfoot td { border-bottom: 0; font-weight: 500; }
+.tbl small { display: block; color: var(--fg-3); }
+.banner { display: flex; gap: var(--s-sm); padding: var(--s-sm) var(--s-md); border-radius: var(--r-md); background: var(--crit-bg); color: var(--crit); font-size: 12px; line-height: 16px; }
+.banner.info { background: var(--ctl); color: var(--fg-2); }
+.banner svg { width: 14px; height: 14px; margin-top: 1px; }
+
+/* modal */
+.scrim { position: fixed; inset: 0; background: #000000a6; display: grid; place-items: center; z-index: 50; padding: 16px; }
+.dialog { background: var(--frame-head); border-radius: var(--r-lg); box-shadow: var(--sh-pop); padding: var(--s-xl); width: min(400px, 100%); display: flex; flex-direction: column; gap: var(--s-md); }
+.dialog h2 { font-size: 15px; font-weight: 500; }
+.dialog p { color: var(--fg-2); }
+.dialog .btns { justify-content: flex-end; margin-top: var(--s-sm); }
+
+@media (max-width: 1180px) { .body { grid-template-columns: minmax(0, 1fr) 320px; } .side { display: none; } }
+@media (max-width: 760px) {
+  html, body, .app { height: auto; }
+  .app { grid-template-rows: auto auto; }
+  .top { flex-wrap: wrap; padding-block: var(--s-sm); height: auto; }
+  .kpis { width: 100%; justify-content: space-between; gap: var(--s-md); }
+  .body { grid-template-columns: minmax(0, 1fr); }
+  .stage { padding: var(--s-md) 0; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .canvas { max-height: 70vh; }
+  .props { border-left: 0; border-top: 1px solid var(--card-edge); }
+  .p-head { position: static; }
+  .legend, .grip-h { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+
+<div class="app">
+  <header class="top">
+    <span class="logo"><i data-lucide="route"></i></span>
+    <nav class="crumbs" aria-label="Ścieżka">
+      <span class="seg"><span class="badge">C</span>CNC Optima</span><i data-lucide="chevron-right" class="chev"></i>
+      <span class="seg"><i data-lucide="git-branch"></i>Marszruty</span><i data-lucide="chevron-right" class="chev"></i>
+      <span class="seg cur" id="crumb-part"></span>
+    </nav>
+    <div class="spacer"></div>
+    <div class="kpis" id="kpis"></div>
+  </header>
+  <div class="body">
+    <aside class="side" id="side" aria-label="Marszruta i biblioteka kroków"></aside>
+    <main class="stage">
+      <div class="frame">
+        <div class="frame-h" id="frame-h"></div>
+        <div class="canvas" id="canvas"><div class="flow" id="flow"></div></div>
+      </div>
+      <div>
+        <div class="ask" id="ask"></div>
+        <p class="ask-note" style="margin-top:6px">Asystent proponuje kroki z reguł technologicznych. Każdą sugestię sprawdź przed wyceną.</p>
+      </div>
+    </main>
+    <aside class="props" id="props" aria-label="Właściwości kroku"></aside>
+  </div>
+</div>
+<div id="modal"></div>
+
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script>
+// ───────── Dane warsztatu (uproszczone, prototyp) ─────────
+const MAT = {
+  al:  { name: 'EN AW-6082 T6', iso: 'N', mrr: 120, vc_face: 700, vc_drill: 150, vc_tap: 25, vc_turn: 400, q_area: 120, feed_contour: 1500 },
+  st:  { name: 'Stal C45',       iso: 'P', mrr: 35,  vc_face: 220, vc_drill: 80,  vc_tap: 12, vc_turn: 220, q_area: 60,  feed_contour: 800 },
+  inc: { name: 'Inconel 718',    iso: 'S', mrr: 6,   vc_face: 40,  vc_drill: 20,  vc_tap: 4,  vc_turn: 45,  q_area: 18,  feed_contour: 200 },
+};
+const MACH = {
+  vmc:     { name: 'VMC nowoczesne', kind: 'mill',  atc: 3,   rate: 180, speed: 1,   maxRpm: 12000, maxFeed: 8000 },
+  vmc_old: { name: 'VMC starsze',    kind: 'mill',  atc: 8,   rate: 120, speed: 0.8, maxRpm: 8000,  maxFeed: 4000 },
+  lathe:   { name: 'Tokarka CNC',    kind: 'lathe', atc: 1.5, rate: 150, speed: 1,   maxRpm: 4000,  maxFeed: 3000 },
+};
+const RIG = { rigid: { name: 'Sztywne', f: 1 }, moderate: { name: 'Umiarkowane −25%', f: 0.75 }, flexible: { name: 'Wiotkie −45%', f: 0.55 } };
+const SIDES = ['Z+', 'Z−', 'X+', 'X−', 'Y+', 'Y−', 'Strona 1', 'Strona 2'];
+const FITS = ['H7', 'P6', 'G7'];
+const STAGE = { rough: 'Zgrubna', finish: 'Wykańczająca', feature: 'Punktowa' };
+
+const F = (k, label, unit, step) => ({ k, label, unit, step });
+const FS = (k, label, opts) => ({ k, label, opts });
+
+const OPS = {
+  face_milling: { label: 'Planowanie czoła', stage: 'rough', icon: 'layers', proc: 'mill', tools: 1,
+    fields: [F('width_mm', 'Szerokość', 'mm'), F('length_mm', 'Długość', 'mm'), F('count', 'Strony', 'szt.', 1)],
+    adv: [F('d_cutter_mm', 'Głowica Ø', 'mm'), F('vc_m_min', 'Vc', 'm/min')],
+    def: (p, m) => ({ width_mm: Math.min(p.x, p.y), length_mm: Math.max(p.x, p.y), count: 1, d_cutter_mm: 50, vc_m_min: m.vc_face }),
+    time: (v, c) => { const rpm = Math.min(c.mach.maxRpm, v.vc_m_min * 1000 / (Math.PI * v.d_cutter_mm)); const feed = Math.min(c.mach.maxFeed, rpm * 0.12 * 5); const passes = Math.ceil(v.width_mm / (0.7 * v.d_cutter_mm)); return { min: v.count * passes * (v.length_mm + v.d_cutter_mm) / feed }; } },
+  milling_rough: { label: 'Frezowanie zgrubne', stage: 'rough', icon: 'box', proc: 'mill', tools: 1,
+    fields: [F('volume_cm3', 'Urobek', 'cm³'), FS('strategy', 'Strategia', ['Konwencjonalna', 'Trochoidalna'])],
+    adv: [F('eta', 'Sprawność η', '', 0.05)],
+    def: () => ({ volume_cm3: 80, strategy: 0, eta: 0.75 }),
+    time: (v, c) => ({ min: v.volume_cm3 / (c.mat.mrr * (v.strategy === 1 ? 1.3 : 1) * v.eta) }) },
+  pocket_rough: { label: 'Kieszeń zgrubna', stage: 'rough', icon: 'square-dashed', proc: 'mill', tools: 1,
+    fields: [F('width_mm', 'Szerokość', 'mm'), F('length_mm', 'Długość', 'mm'), F('depth_mm', 'Głębokość', 'mm', 0.5), F('corner_r_mm', 'R naroża', 'mm', 0.5), F('count', 'Ilość', 'szt.', 1)],
+    adv: [],
+    def: () => ({ width_mm: 40, length_mm: 60, depth_mm: 10, corner_r_mm: 6, count: 1 }),
+    time: (v, c) => { const V = Math.max(0, (v.width_mm * v.length_mm - (4 - Math.PI) * v.corner_r_mm ** 2) * v.depth_mm) / 1000 * v.count; const flags = []; const ld = v.depth_mm / (2 * v.corner_r_mm); if (ld > 4) flags.push({ level: 'review', text: `Głęboka kieszeń, wysięg frezu L/D ${n(ld, 1)}. Sprawdź narzędzie.` }); return { min: V / (c.mat.mrr * 0.6) * (ld > 4 ? 1 + (ld - 4) * 0.2 : 1), flags }; } },
+  turning_rough: { label: 'Toczenie zgrubne', stage: 'rough', icon: 'disc', proc: 'lathe', tools: 1,
+    fields: [F('diameter_mm', 'Ø', 'mm', 0.5), F('length_mm', 'Długość', 'mm'), F('radial_allowance_mm', 'Naddatek', 'mm', 0.5)],
+    adv: [F('ap_mm', 'ap max', 'mm', 0.5), F('f_mm_rev', 'Posuw f', 'mm/obr', 0.05)],
+    def: p => ({ diameter_mm: p.x, length_mm: p.z, radial_allowance_mm: 3, ap_mm: 2, f_mm_rev: 0.3 }),
+    time: (v, c) => { const passes = Math.ceil(v.radial_allowance_mm / v.ap_mm); const rpm = Math.min(c.mach.maxRpm, c.mat.vc_turn * 1000 / (Math.PI * v.diameter_mm)); return { min: passes * (v.length_mm + 2) / (rpm * v.f_mm_rev) * 1.15 }; } },
+  milling_finish: { label: 'Wykańczanie powierzchni', stage: 'finish', icon: 'sparkles', proc: 'mill', tools: 1,
+    fields: [F('area_cm2', 'Powierzchnia', 'cm²'), F('ra_um', 'Ra', 'µm', 0.1), FS('it_grade', 'Klasa IT', [6, 7, 8, 9, 10, 11].map(i => `IT${i}`))],
+    adv: [],
+    def: () => ({ area_cm2: 50, ra_um: 3.2, it_grade: 3 }),
+    time: (v, c) => { const it = v.it_grade + 6; const d = v.ra_um >= 3.2 ? 1 : v.ra_um >= 1.6 ? 0.7 : v.ra_um >= 0.8 ? 0.45 : 0.3; const flags = []; if (it <= 6) flags.push({ level: 'review', text: 'IT6 na frezowaniu. Zaplanuj pomiar w cyklu.' }); return { min: v.area_cm2 / (c.mat.q_area * d) * (it <= 7 ? 1.2 : 1), flags }; } },
+  thin_wall: { label: 'Cienkie ścianki', stage: 'finish', icon: 'columns-3', proc: 'mill', tools: 1,
+    fields: [F('area_cm2', 'Powierzchnia', 'cm²'), F('wall_h_mm', 'Wysokość H', 'mm'), F('wall_t_mm', 'Grubość t', 'mm', 0.1), F('ra_um', 'Ra', 'µm', 0.1)],
+    adv: [],
+    def: () => ({ area_cm2: 30, wall_h_mm: 25, wall_t_mm: 2, ra_um: 3.2 }),
+    time: (v, c) => { const r = v.wall_h_mm / v.wall_t_mm; const f = r > 15 ? 1.6 : r > 10 ? 1.3 : 1; const flags = []; if (r > 10) flags.push({ level: 'review', text: `Smukłość H:t ${n(r, 1)}. Frezowanie schodkowe, czas ×${n(f, 1)}.` }); return { min: v.area_cm2 / c.mat.q_area * f * (v.ra_um < 1.6 ? 1.4 : 1), flags }; } },
+  turning_finish: { label: 'Toczenie wykańczające', stage: 'finish', icon: 'disc-3', proc: 'lathe', tools: 1,
+    fields: [F('diameter_mm', 'Ø', 'mm', 0.5), F('length_mm', 'Długość', 'mm'), F('ra_um', 'Ra', 'µm', 0.1)],
+    adv: [F('r_eps_mm', 'rε płytki', 'mm', 0.1)],
+    def: p => ({ diameter_mm: p.x, length_mm: p.z, ra_um: 1.6, r_eps_mm: 0.8 }),
+    time: (v, c) => { const f = Math.sqrt(v.ra_um * 32 * v.r_eps_mm / 1000); const rpm = Math.min(c.mach.maxRpm, c.mat.vc_turn * 1.2 * 1000 / (Math.PI * v.diameter_mm)); return { min: (v.length_mm + 2) / (rpm * f), note: `posuw ${n(f, 2)} mm/obr z Ra` }; } },
+  chamfer: { label: 'Fazowanie krawędzi', stage: 'finish', icon: 'spline', proc: 'mill', tools: 1,
+    fields: [F('contour_length_mm', 'Kontur', 'mm'), F('chamfer_mm', 'Faza', 'mm', 0.05), F('passes', 'Przejścia', '', 1)],
+    adv: [F('feed_mm_min', 'Posuw', 'mm/min')],
+    def: (p, m) => ({ contour_length_mm: 2 * (p.x + p.y), chamfer_mm: 0.5, passes: 1, feed_mm_min: m.feed_contour }),
+    time: v => ({ min: v.contour_length_mm * v.passes / v.feed_mm_min }) },
+  drilling: { label: 'Wiercenie', stage: 'feature', icon: 'circle-dot', proc: 'any', tools: 1,
+    fields: [F('diameter_mm', 'Ø', 'mm', 0.1), F('depth_mm', 'Głębokość', 'mm', 0.5), F('count', 'Ilość', 'szt.', 1)],
+    adv: [F('vc_m_min', 'Vc', 'm/min')],
+    def: (p, m) => ({ diameter_mm: 8, depth_mm: 20, count: 4, vc_m_min: m.vc_drill }),
+    time: (v, c) => drillTime(v, c) },
+  fit_hole: { label: 'Otwór pasowany', stage: 'feature', icon: 'target', proc: 'any', tools: 2,
+    fields: [F('diameter_mm', 'Ø', 'mm', 0.5), F('depth_mm', 'Głębokość', 'mm', 0.5), F('count', 'Ilość', 'szt.', 1), FS('fit', 'Pasowanie', FITS)],
+    adv: [],
+    def: (p, m) => ({ diameter_mm: 10, depth_mm: 15, count: 2, fit: 0, vc_m_min: m.vc_drill }),
+    time: (v, c) => { const d = drillTime({ ...v, diameter_mm: v.diameter_mm - 0.2 }, c); const rpm = Math.min(c.mach.maxRpm, c.mat.vc_drill * 0.4 * 1000 / (Math.PI * v.diameter_mm)); const ream = v.count * (v.depth_mm + 3) / (rpm * 0.3); return { min: d.min + ream, flags: d.flags, note: 'wiercenie i rozwiercanie' }; } },
+  tapping: { label: 'Gwintowanie', stage: 'feature', icon: 'rotate-cw', proc: 'any', tools: 1,
+    fields: [F('diameter_mm', 'Ø nom.', 'mm', 0.5), F('pitch_mm', 'Skok', 'mm', 0.05), F('depth_mm', 'Głębokość', 'mm', 0.5), F('count', 'Ilość', 'szt.', 1)],
+    adv: [F('vc_m_min', 'Vc gwint.', 'm/min')],
+    def: (p, m) => ({ diameter_mm: 8, pitch_mm: 1.25, depth_mm: 12, count: 4, vc_m_min: m.vc_tap }),
+    time: (v, c) => { const rpm = Math.min(c.mach.maxRpm, v.vc_m_min * 1000 / (Math.PI * v.diameter_mm)); return { min: v.count * (2 * (v.depth_mm + 2) / (rpm * v.pitch_mm) + 0.05) }; } },
+};
+function drillTime(v, c) {
+  const rpm = Math.min(c.mach.maxRpm, v.vc_m_min * 1000 / (Math.PI * v.diameter_mm));
+  const f = v.diameter_mm >= 10 ? 0.2 : v.diameter_mm >= 5 ? 0.15 : 0.08;
+  const ld = v.depth_mm / v.diameter_mm;
+  const peck = ld > 3 ? 1 + (ld - 3) * 0.15 : 1;
+  const flags = [];
+  if (ld > 5) flags.push({ level: 'review', text: `L/D ${n(ld, 1)}: wiercenie z łamaniem wióra G83, czas ×${n(peck, 2)}.` });
+  return { min: v.count * ((v.depth_mm + 3) / (rpm * f) * peck + 0.05), flags };
+}
+
+const STEP = {
+  setup:  { label: 'Zamocowanie', hint: 'maszyna, strona, TPZ', icon: 'crosshair', tone: 't-setup',
+    def: () => ({ machine: 'vmc', side: 'Z+', rig: 'rigid', tpz_min: 20, operator_s: 30 }) },
+  manual: { label: 'Praca ręczna', hint: 'gratowanie, cięcie', icon: 'hand', tone: 't-manual',
+    def: () => ({ time_min: 1, rate: 60 }) },
+  coop:   { label: 'Kooperacja', hint: 'hartowanie, anoda', icon: 'truck', tone: 't-coop',
+    def: () => ({ price_pcs: 5, days: 3 }) },
+  qc:     { label: 'Kontrola', hint: 'pomiar, protokół', icon: 'clipboard-check', tone: 't-qc',
+    def: () => ({ time_min: 1.5, rate: 80 }) },
+};
+const toneOf = s => s.type === 'op' ? `t-${OPS[s.kind].stage}` : STEP[s.type].tone;
+const iconOf = s => s.type === 'op' ? OPS[s.kind].icon : STEP[s.type].icon;
+
+// ───────── Szablony ─────────
+let _id = 0; const uid = () => `s${++_id}`;
+const st = (type, name, params = {}, kind) => ({ id: uid(), type, kind, name: name ?? (type === 'op' ? OPS[kind].label : STEP[type].label), params: type === 'op' ? params : { ...STEP[type].def(), ...params } });
+const op = (kind, params, name) => st('op', name, params, kind);
+const TEMPLATES = {
+  plyta: { label: 'Płyta, 2 zamocowania i anoda', hint: 'Aluminium, kieszeń, gwinty, pasowania',
+    build: () => ({ part: { name: 'Płyta aluminiowa 6082', mat: 'al', shape: 'box', x: 120, y: 80, z: 20, qty: 25, reserve: 10 }, steps: [
+      st('setup', 'Zamocowanie 1', { machine: 'vmc', side: 'Z+', tpz_min: 30, operator_s: 45 }),
+      op('face_milling', {}),
+      op('pocket_rough', { width_mm: 60, length_mm: 40, depth_mm: 12, corner_r_mm: 6 }, 'Kieszeń centralna'),
+      op('milling_finish', { area_cm2: 85, ra_um: 1.6, it_grade: 2 }),
+      op('drilling', { diameter_mm: 6.8, depth_mm: 15, count: 8 }, 'Wiercenie pod M8'),
+      op('tapping', { diameter_mm: 8, pitch_mm: 1.25, depth_mm: 12, count: 8 }, 'Gwintowanie M8'),
+      op('drilling', { diameter_mm: 4.2, depth_mm: 26, count: 4 }, 'Wiercenie pod M5'),
+      op('fit_hole', { diameter_mm: 10, depth_mm: 15, count: 2, fit: 0 }, 'Otwory bazujące H7'),
+      st('setup', 'Zamocowanie 2', { machine: 'vmc', side: 'Z−', rig: 'moderate', tpz_min: 15, operator_s: 30 }),
+      op('face_milling', {}, 'Planowanie na wymiar'),
+      op('chamfer', { contour_length_mm: 400, chamfer_mm: 0.5 }, 'Fazowanie konturu'),
+      st('manual', 'Gratowanie ręczne', { time_min: 1.5 }),
+      st('coop', 'Anodowanie twarde', { price_pcs: 6.5, days: 5 }),
+    ] }) },
+  walek: { label: 'Wałek toczony z rowkiem', hint: 'Stal, 2 strony na tokarce, hartowanie',
+    build: () => ({ part: { name: 'Wałek napędowy C45', mat: 'st', shape: 'cyl', x: 50, y: 50, z: 120, qty: 40, reserve: 10 }, steps: [
+      st('setup', 'Tokarka, strona 1', { machine: 'lathe', side: 'Strona 1', tpz_min: 40, operator_s: 30 }),
+      op('turning_rough', { diameter_mm: 50, length_mm: 80, radial_allowance_mm: 4 }),
+      op('turning_finish', { diameter_mm: 42, length_mm: 80, ra_um: 1.6 }),
+      op('drilling', { diameter_mm: 10, depth_mm: 30, count: 1 }, 'Otwór osiowy Ø10'),
+      st('setup', 'Tokarka, strona 2', { machine: 'lathe', side: 'Strona 2', tpz_min: 15, operator_s: 30 }),
+      op('turning_rough', { diameter_mm: 50, length_mm: 40, radial_allowance_mm: 4 }),
+      op('turning_finish', { diameter_mm: 30, length_mm: 40, ra_um: 0.8 }),
+      st('setup', 'Frezarka, rowek', { machine: 'vmc_old', side: 'Y+', rig: 'moderate', tpz_min: 25, operator_s: 40 }),
+      op('pocket_rough', { width_mm: 8, length_mm: 32, depth_mm: 4, corner_r_mm: 4 }, 'Rowek wpustowy 8×32'),
+      st('coop', 'Hartowanie indukcyjne', { price_pcs: 9, days: 3 }),
+      st('qc', 'Kontrola końcowa', { time_min: 2 }),
+    ] }) },
+};
+
+// ───────── Stan ─────────
+const S = { part: null, steps: [], sel: null, dismissed: new Set(), addAt: null };
+function loadTemplate(key) { const t = TEMPLATES[key].build(); S.part = t.part; S.steps = t.steps; S.sel = null; S.dismissed = new Set(); S.addAt = null; renderAll(); }
+function clearAll() { S.steps = []; S.sel = null; S.dismissed = new Set(); S.addAt = null; renderAll(); }
+
+// ───────── Formatowanie ─────────
+const n = (v, d = 0) => Number.isFinite(v) ? v.toLocaleString('pl-PL', { maximumFractionDigits: d, minimumFractionDigits: 0 }) : '–';
+const money = v => `${(v || 0).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
+function clock(min) { const t = Math.round((min || 0) * 60); const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = t % 60; const p = x => String(x).padStart(2, '0'); return h ? `${h}:${p(m)}:${p(s)}` : `${m}:${p(s)}`; }
+function hours(min) { const h = Math.floor(min / 60), m = Math.round(min % 60); return h ? `${h} h ${m} min` : `${m} min`; }
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const ico = name => `<i data-lucide="${name}"></i>`;
+
+// ───────── Silnik (uproszczony) ─────────
+function compute() {
+  const res = {}; const groups = []; let no = 0; let cur = null;
+  const mat = MAT[S.part.mat];
+  S.steps.forEach((s, i) => {
+    if (s.type !== 'op') {
+      no += 10; const g = { step: s, idx: i, no, ops: [], cut: 0, tools: 0, lastIdx: i };
+      groups.push(g); res[s.id] = { no: `OP${no}`, flags: [], g };
+      cur = s.type === 'setup' ? g : null; return;
+    }
+    const d = OPS[s.kind]; const r = { flags: [], min: 0 };
+    const auto = d.def(S.part, mat); const v = { ...auto, ...s.params }; r.inputs = v;
+    if (!cur) { r.no = 'OP ?'; r.orphan = true; r.flags.push({ level: 'blocked', text: 'Operacja poza zamocowaniem. Przeciągnij ją pod krok Zamocowanie.' }); res[s.id] = r; return; }
+    const mach = MACH[cur.step.params.machine]; const rig = RIG[cur.step.params.rig] ?? RIG.rigid;
+    cur.ops.push(s); cur.lastIdx = i; r.no = `OP${cur.no}.${cur.ops.length}`; r.parent = cur;
+    if (d.proc !== 'any' && d.proc !== mach.kind) r.flags.push({ level: 'blocked', text: d.proc === 'lathe' ? `Toczenie wymaga tokarki, a ${cur.step.name} stoi na ${mach.name}.` : `Frezowanie wymaga frezarki, a ${cur.step.name} stoi na tokarce.` });
+    const t = d.time(v, { mat, mach, part: S.part });
+    r.base = t.min; r.note = t.note;
+    r.min = t.min / (mach.speed * rig.f) * (1 + (s.params.adjust ?? 0) / 100);
+    (t.flags || []).forEach(f => r.flags.push(f));
+    cur.cut += r.min; cur.tools += d.tools; res[s.id] = r;
+  });
+  const qty = Math.max(1, S.part.qty);
+  groups.forEach(g => {
+    const s = g.step, p = s.params, r = res[s.id];
+    if (s.type === 'setup') {
+      const m = MACH[p.machine];
+      g.atc = g.tools * m.atc / 60; g.reserve = (g.cut + g.atc) * S.part.reserve / 100; g.oper = p.operator_s / 60;
+      g.unit = g.cut + g.atc + g.reserve + g.oper; g.tpz = p.tpz_min; g.rate = m.rate;
+      g.costUnit = g.unit * m.rate / 60 + g.tpz * m.rate / 60 / qty;
+      if (!g.ops.length) r.flags.push({ level: 'info', text: 'Zamocowanie bez operacji. Dodaj kafelki pod nim.' });
+    } else if (s.type === 'coop') { g.unit = 0; g.tpz = 0; g.costUnit = p.price_pcs; g.days = p.days; }
+    else { g.unit = p.time_min; g.tpz = 0; g.costUnit = p.time_min * p.rate / 60; }
+    r.min = g.unit;
+  });
+  const tot = groups.reduce((a, g) => ({ unit: a.unit + g.unit, tpz: a.tpz + g.tpz, cost: a.cost + g.costUnit, days: a.days + (g.days || 0) }), { unit: 0, tpz: 0, cost: 0, days: 0 });
+  tot.batch = tot.tpz + qty * tot.unit;
+  tot.blocked = Object.values(res).reduce((a, r) => a + r.flags.filter(f => f.level === 'blocked').length, 0);
+
+  const sugg = [];
+  groups.filter(g => g.step.type === 'setup').forEach(g => {
+    const taps = g.ops.filter(o => o.kind === 'tapping');
+    if (taps.length && !g.ops.some(o => o.kind === 'chamfer')) {
+      const len = taps.reduce((a, o) => { const v = res[o.id].inputs; return a + Math.PI * v.diameter_mm * v.count; }, 0);
+      sugg.push({ id: `chamfer-${g.step.id}`, after: g.lastIdx, icon: 'spline', text: `Fazowanie otworów pod gwint w OP${g.no}`, add: () => op('chamfer', { contour_length_mm: Math.round(len), chamfer_mm: 0.3 }, 'Fazowanie otworów pod gwint') });
+    }
+  });
+  const lastCoop = S.steps.map(s => s.type).lastIndexOf('coop');
+  if (lastCoop >= 0 && !S.steps.slice(lastCoop + 1).some(s => s.type === 'qc'))
+    sugg.push({ id: 'qc-after-coop', after: lastCoop, icon: 'clipboard-check', text: 'Kontrola końcowa po kooperacji', add: () => st('qc', 'Kontrola końcowa') });
+  if (S.steps.length && S.steps[0].type !== 'setup' && !S.steps.some(s => s.type === 'setup'))
+    sugg.push({ id: 'first-setup', after: -1, icon: 'crosshair', text: 'Zamocowanie na początku marszruty', add: () => st('setup', 'Zamocowanie 1') });
+  return { res, groups, tot, sugg: sugg.filter(x => !S.dismissed.has(x.id)) };
+}
+const worst = flags => flags.some(f => f.level === 'blocked') ? 'blocked' : flags.some(f => f.level === 'review') ? 'review' : 'ok';
+
+// ───────── Render: top ─────────
+function renderTop(c) {
+  document.getElementById('crumb-part').textContent = S.part.name;
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><span>Czas / szt.</span><b>${clock(c.tot.unit)}</b></div>
+    <div class="kpi"><span>Partia ${n(S.part.qty)} szt.</span><b>${hours(c.tot.batch)}</b></div>
+    <div class="kpi"><span>Koszt / szt.</span><b>${money(c.tot.cost)}</b></div>`;
+}
+
+// ───────── Render: lewy panel ─────────
+function renderSide(c) {
+  let tree = '';
+  S.steps.forEach(s => {
+    const r = c.res[s.id];
+    if (s.type === 'op') tree += `<button class="row child${S.sel === s.id ? ' sel' : ''}" data-id="${s.id}"><span class="ic">${ico(iconOf(s))}</span><span class="lbl">${esc(s.name)}</span><span class="dot ${worst(r.flags)}"></span></button>`;
+    else { const childFlags = s.type === 'setup' ? [r.flags, ...r.g.ops.map(o => c.res[o.id].flags)].flat() : r.flags; tree += `<button class="row${S.sel === s.id ? ' sel' : ''}" data-id="${s.id}"><span class="tile sm ${toneOf(s)}">${ico(iconOf(s))}</span><span class="lbl">${esc(s.name)}</span><span class="no">${r.no}</span><span class="dot ${worst(childFlags)}"></span></button>`; }
+  });
+  const lib = (key, icon, tone, label) => `<button class="row lib" draggable="true" data-new="${key}"><span class="tile sm ${tone}">${ico(icon)}</span><span class="lbl">${label}</span><span class="grip">${ico('grip-vertical')}</span></button>`;
+  let library = `<div class="grp-h">Kroki marszruty</div>` + Object.entries(STEP).map(([k, d]) => lib(k, d.icon, d.tone, d.label)).join('');
+  Object.entries(STAGE).forEach(([sk, sl]) => { library += `<div class="grp-h">Obróbka ${sl.toLowerCase()}</div>` + Object.entries(OPS).filter(([, d]) => d.stage === sk).map(([k, d]) => lib(`op:${k}`, d.icon, `t-${sk}`, d.label)).join(''); });
+  document.getElementById('side').innerHTML = `
+    <div class="sec"><div class="sec-h">Detal</div><button class="row${S.sel === 'part' ? ' sel' : ''}" data-id="part"><span class="tile sm t-part">${ico('package')}</span><span class="lbl">${esc(S.part.name)}</span></button></div>
+    <div class="sec"><div class="sec-h">Marszruta<small>${c.groups.length} kroków</small></div>${tree || '<p class="hint" style="padding:0 8px">Brak kroków.</p>'}</div>
+    <div class="sec"><div class="sec-h">Biblioteka kroków<small>przeciągnij</small></div>${library}</div>
+    <div class="sec"><div class="sec-h">Szablony marszrut</div>${Object.entries(TEMPLATES).map(([k, t]) => `<button class="tpl" data-tpl="${k}"><span>${t.label}</span><small>${t.hint}</small></button>`).join('')}<button class="tpl" data-clear><span>Pusta marszruta</span><small>Zacznij od zera</small></button></div>`;
+}
+
+// ───────── Render: canvas ─────────
+function catalogueMenu() {
+  const item = (key, icon, tone, label, hint) => `<button class="row" data-add="${key}" role="menuitem"><span class="tile sm ${tone}">${ico(icon)}</span><span class="lbl">${label}</span>${hint ? `<small>${hint}</small>` : ''}</button>`;
+  let h = `<div class="grp-h">Kroki marszruty</div>` + Object.entries(STEP).map(([k, d]) => item(k, d.icon, d.tone, d.label, d.hint)).join('');
+  Object.entries(STAGE).forEach(([sk, sl]) => { h += `<div class="grp-h">Obróbka ${sl.toLowerCase()}</div>` + Object.entries(OPS).filter(([, d]) => d.stage === sk).map(([k, d]) => item(`op:${k}`, d.icon, `t-${sk}`, d.label, d.proc === 'lathe' ? 'tokarka' : '')).join(''); });
+  return `<div class="menu" role="menu">${h}</div>`;
+}
+function fieldVal(f, v) { return f.opts ? f.opts[v] : `${n(v, 2)}${f.unit ? ` ${f.unit}` : ''}`; }
+function bodyHtml(s, r) {
+  let txt = '';
+  const tok = (label, val, set) => `${label} <span class="${set ? 'v-set' : 'v-auto'}">${esc(val)}</span>`;
+  if (s.type === 'op') { const d = OPS[s.kind]; txt = d.fields.map(f => tok(f.label, fieldVal(f, r.inputs[f.k]), s.params[f.k] !== undefined)).join(', '); }
+  else if (s.type === 'setup') { const p = s.params; txt = `${tok('Strona', p.side, true)}, ${tok('sztywność', RIG[p.rig].name, true)}, ${tok('TPZ', `${n(p.tpz_min)} min`, true)}, ${tok('operator', `${n(p.operator_s)} s/szt.`, true)}`; }
+  else if (s.type === 'coop') txt = `${tok('Cena', `${money(s.params.price_pcs)}/szt.`, true)}, ${tok('realizacja', `${n(s.params.days)} dni`, true)}. Nie zajmuje maszyny.`;
+  else txt = `${tok('Czas', `${n(s.params.time_min, 1)} min/szt.`, true)}, ${tok('stawka', `${n(s.params.rate)} zł/h`, true)}`;
+  const flags = r.flags.map(f => `<div class="flag ${f.level}">${ico(f.level === 'blocked' ? 'octagon-x' : f.level === 'review' ? 'triangle-alert' : 'info')}<span>${esc(f.text)}</span></div>`).join('');
+  return `<div class="card-b"><p>${txt}</p>${flags}</div>`;
+}
+function stepHtml(s, i, c) {
+  const r = c.res[s.id]; const sel = S.sel === s.id; const bad = r.flags.some(f => f.level === 'blocked');
+  const pillCls = bad ? 'bad' : s.type === 'setup' ? 'setup' : '';
+  const pill = s.type === 'op' ? `${r.no} · ${STAGE[OPS[s.kind].stage]}` : `${r.no} · ${STEP[s.type].label}`;
+  let suffix = '';
+  if (s.type === 'setup') suffix = ` na ${MACH[s.params.machine].name}`;
+  const time = s.type === 'coop' ? `${n(s.params.days)} dni` : clock(r.min);
+  const open = S.addAt === i + 1;
+  return `<div class="step"><span class="pill ${pillCls}">${pill}</span>
+    <div class="card${sel ? ' sel' : ''}${bad ? ' bad' : ''}" role="button" tabindex="0" aria-pressed="${sel}" draggable="true" data-id="${s.id}">
+      <span class="grip-h" aria-hidden="true">${ico('grip-vertical')}</span>
+      <div class="card-h"><span class="tile ${toneOf(s)}">${ico(iconOf(s))}</span><span class="card-t"><b>${esc(s.name)}</b>${esc(suffix)}</span><span class="time">${time}</span>
+      <button class="plus" data-plus="${i + 1}" aria-label="Dodaj krok po: ${esc(s.name)}" aria-expanded="${open}" aria-haspopup="menu">${ico('plus')}</button></div>
+      ${bodyHtml(s, r)}
+    </div>${open ? catalogueMenu() : ''}</div>`;
+}
+function connHtml(at) { return `<div class="conn" data-at="${at}"><span class="drop">Upuść tutaj</span></div>`; }
+function renderCanvas(c) {
+  const p = S.part, mat = MAT[p.mat];
+  const dims = p.shape === 'cyl' ? `Ø${n(p.x)} × ${n(p.z)} mm` : `${n(p.x)} × ${n(p.y)} × ${n(p.z)} mm`;
+  document.getElementById('frame-h').innerHTML = `<span class="ic">${ico('git-branch')}</span><b>${esc(p.name)}</b><span class="rec" style="background:${c.tot.blocked ? 'var(--crit)' : 'var(--ok)'}" title="${c.tot.blocked ? 'Marszruta ma błędy' : 'Marszruta gotowa do wyceny'}"></span><span class="spacer"></span><span class="legend"><span><i style="background:var(--link)"></i>wpisane</span><span><i style="background:var(--auto)"></i>auto z materiału</span></span>`;
+  const startOpen = S.addAt === 0;
+  let h = `<div class="step"><span class="pill trig">Detal</span>
+    <div class="card${S.sel === 'part' ? ' sel' : ''}" role="button" tabindex="0" data-id="part">
+      <div class="card-h"><span class="tile t-part">${ico('package')}</span><span class="card-t"><b>${esc(p.name)}</b> ${n(p.qty)} szt.</span>
+      <button class="plus" data-plus="0" aria-label="Dodaj pierwszy krok" aria-expanded="${startOpen}" aria-haspopup="menu">${ico('plus')}</button></div>
+      <div class="card-b"><p>Materiał <span class="v-set">${esc(mat.name)}</span>, półfabrykat <span class="v-set">${dims}</span>, rezerwa <span class="v-set">${n(p.reserve)}%</span></p></div>
+    </div>${startOpen ? catalogueMenu() : ''}</div>`;
+  if (!S.steps.length) {
+    h += connHtml(0) + `<div class="empty"><span class="tile t-setup">${ico('crosshair')}</span><b>Brak kroków</b><p>Zacznij od zamocowania. Operacje pod nim dziedziczą maszynę i TPZ.</p><div class="btns" style="justify-content:center"><button class="btn white" data-add-direct="setup">${ico('plus')}Dodaj zamocowanie</button></div></div>`;
+  } else {
+    S.steps.forEach((s, i) => { h += connHtml(i) + stepHtml(s, i, c); });
+    h += connHtml(S.steps.length);
+    h += `<div class="step"><span class="pill ${c.tot.blocked ? 'bad' : 'trig'}">Wynik</span><div class="card${S.sel === null ? ' sel' : ''}" role="button" tabindex="0" data-id="summary"><div class="card-h"><span class="tile ${c.tot.blocked ? 't-coop' : 't-feature'}">${ico(c.tot.blocked ? 'octagon-x' : 'flag')}</span><span class="card-t">${c.tot.blocked ? `<b>${c.tot.blocked} błędy</b> blokują wycenę` : `<b>${money(c.tot.cost)}</b> za sztukę`}</span><span class="time">${clock(c.tot.unit)}</span></div></div></div>`;
+  }
+  document.getElementById('flow').innerHTML = h;
+}
+
+// ───────── Render: asystent ─────────
+function renderAsk(c) {
+  const s = S.steps.find(x => x.id === S.sel);
+  const crumb = [S.part.name]; if (s) { const r = c.res[s.id]; if (r.parent) crumb.push(r.parent.step.name); crumb.push(s.name); }
+  const chips = c.sugg.map(g => `<button class="chip" data-sugg="${g.id}" title="Dodaj krok">${ico(g.icon)}<span class="chip-lbl">${esc(g.text)}</span><span class="x" data-dismiss="${g.id}" role="button" aria-label="Odrzuć sugestię">${ico('x')}</span></button>`).join('');
+  document.getElementById('ask').innerHTML = `<div class="ask-crumb">${crumb.map(esc).join(` ${ico('chevron-right')} `)}</div>
+    <div class="ask-b"><span class="orb" aria-hidden="true"></span><span class="ask-t">${c.sugg.length ? 'Sugestie asystenta' : 'Asystent nie ma uwag do tej marszruty.'}</span>${chips}</div>`;
+}
+
+// ───────── Render: właściwości ─────────
+function numRow(id, f, val, auto) {
+  return `<div class="prow"><label for="${id}">${f.label}</label><div class="ctl"><input id="${id}" data-k="${f.k}" type="number" inputmode="decimal" step="${f.step ?? 'any'}" class="${f.unit ? 'has-unit' : ''}${val !== undefined && auto !== undefined ? ' set' : ''}" value="${val ?? ''}" placeholder="${auto !== undefined ? n(auto, 2) : ''}">${f.unit ? `<span class="unit">${f.unit}</span>` : ''}</div></div>`;
+}
+function selRow(id, label, k, opts, val, attr = 'data-k') {
+  return `<div class="prow"><label for="${id}">${label}</label><div class="ctl"><select id="${id}" ${attr}="${k}" data-sel="1">${opts.map(([v, l]) => `<option value="${v}"${String(v) === String(val) ? ' selected' : ''}>${l}</option>`).join('')}</select><span class="chev">${ico('chevron-down')}</span></div></div>`;
+}
+function pHead(icon, tone, title, editable) {
+  return `<div class="p-head"><span class="tile sm ${tone}">${ico(icon)}</span>${editable ? `<input id="f-name" value="${esc(title)}" aria-label="Nazwa kroku">` : `<span class="static">${esc(title)}</span>`}<button class="icon-btn" data-close aria-label="Zamknij i pokaż podsumowanie">${ico('x')}</button></div>`;
+}
+function renderProps(c) {
+  const el = document.getElementById('props');
+  if (S.sel === 'part') { el.innerHTML = partProps(); return; }
+  const s = S.steps.find(x => x.id === S.sel);
+  if (!s) { el.innerHTML = summaryProps(c); return; }
+  const idx = S.steps.indexOf(s); let h = pHead(iconOf(s), toneOf(s), s.name, true);
+  if (s.type === 'op') {
+    const d = OPS[s.kind]; const auto = d.def(S.part, MAT[S.part.mat]);
+    const fld = f => f.opts ? selRow(`f-${f.k}`, f.label, f.k, f.opts.map((o, i) => [i, o]), s.params[f.k] ?? auto[f.k]) : numRow(`f-${f.k}`, f, s.params[f.k], auto[f.k]);
+    h += `<div class="p-sec"><b>Parametry<small>zielone = auto</small></b>${d.fields.map(fld).join('')}</div>`;
+    if (d.adv.length) h += `<div class="p-sec"><b>Narzędzie i skrawanie</b>${d.adv.map(fld).join('')}</div>`;
+    h += `<div class="p-sec"><b>Kalibracja</b>${numRow('f-adjust', { k: 'adjust', label: 'Korekta czasu', unit: '%', step: 5 }, s.params.adjust, 0)}<p class="hint">Po próbnym detalu wpisz, o ile ta operacja trwa dłużej (+) lub krócej (−) niż wylicza silnik.</p></div>`;
+  } else if (s.type === 'setup') {
+    const p = s.params;
+    h += `<div class="p-sec"><b>Maszyna i mocowanie</b>
+      ${selRow('f-machine', 'Maszyna', 'machine', Object.entries(MACH).map(([k, m]) => [k, `${m.name} · ${m.rate} zł/h`]), p.machine)}
+      ${selRow('f-side', 'Strona', 'side', SIDES.map(x => [x, x]), p.side)}
+      ${selRow('f-rig', 'Sztywność', 'rig', Object.entries(RIG).map(([k, x]) => [k, x.name]), p.rig)}</div>
+      <div class="p-sec"><b>Czasy</b>${numRow('f-tpz', { k: 'tpz_min', label: 'TPZ', unit: 'min', step: 5 }, p.tpz_min)}${numRow('f-oper', { k: 'operator_s', label: 'Operator / szt.', unit: 's', step: 5 }, p.operator_s)}<p class="hint">TPZ płacisz raz na partię, za każde zamocowanie osobno. Operacje pod tym krokiem dziedziczą maszynę.</p></div>`;
+  } else if (s.type === 'coop') {
+    h += `<div class="p-sec"><b>Kooperacja</b>${numRow('f-price', { k: 'price_pcs', label: 'Cena / szt.', unit: 'zł', step: 0.5 }, s.params.price_pcs)}${numRow('f-days', { k: 'days', label: 'Realizacja', unit: 'dni', step: 1 }, s.params.days)}<p class="hint">Nie zajmuje maszyny. Wchodzi w koszt sztuki i w termin dostawy.</p></div>`;
+  } else {
+    h += `<div class="p-sec"><b>${s.type === 'qc' ? 'Kontrola' : 'Praca ręczna'}</b>${numRow('f-time', { k: 'time_min', label: 'Czas / szt.', unit: 'min', step: 0.5 }, s.params.time_min)}${numRow('f-rate', { k: 'rate', label: 'Stawka', unit: 'zł/h', step: 5 }, s.params.rate)}</div>`;
+  }
+  h += `<div class="p-sec" id="result">${resultHtml(s, c)}</div>`;
+  h += `<div class="p-sec"><b>Krok</b><div class="btns">
+    <button class="btn" data-move="-1"${idx === 0 ? ' disabled' : ''}>${ico('arrow-up')}Wyżej</button>
+    <button class="btn" data-move="1"${idx === S.steps.length - 1 ? ' disabled' : ''}>${ico('arrow-down')}Niżej</button>
+    <button class="btn" data-dup>${ico('copy')}Duplikuj</button>
+    <button class="btn danger" data-del>${ico('trash-2')}Usuń</button></div></div>`;
+  el.innerHTML = h;
+}
+function resultHtml(s, c) {
+  const r = c.res[s.id]; let h = '<b>Wynik</b>';
+  if (s.type === 'op') {
+    h += `<div class="kv big"><span>Czas / szt.</span><span>${clock(r.min)}</span></div>`;
+    if (r.parent) { const m = MACH[r.parent.step.params.machine], g = RIG[r.parent.step.params.rig]; h += `<div class="kv"><span>Wzór bazowy</span><span>${clock(r.base)}</span></div><div class="kv"><span>${m.name}</span><span>×${n(1 / m.speed, 2)}</span></div><div class="kv"><span>Sztywność</span><span>×${n(1 / g.f, 2)}</span></div>${s.params.adjust ? `<div class="kv"><span>Korekta</span><span>${s.params.adjust > 0 ? '+' : ''}${n(s.params.adjust)}%</span></div>` : ''}${r.note ? `<div class="kv"><span>Uwaga</span><span>${esc(r.note)}</span></div>` : ''}`; }
+  } else if (s.type === 'setup') {
+    const g = r.g; h += `<div class="kv big"><span>Zamocowanie / szt.</span><span>${clock(g.unit)}</span></div><div class="kv"><span>Skrawanie, ${g.ops.length} op.</span><span>${clock(g.cut)}</span></div><div class="kv"><span>Wymiany narzędzi (${g.tools})</span><span>${clock(g.atc)}</span></div><div class="kv"><span>Rezerwa ${n(S.part.reserve)}%</span><span>${clock(g.reserve)}</span></div><div class="kv"><span>Operator</span><span>${clock(g.oper)}</span></div><div class="kv"><span>Koszt / szt. z TPZ</span><span>${money(g.costUnit)}</span></div>`;
+  } else h += `<div class="kv big"><span>Koszt / szt.</span><span>${money(r.g.costUnit)}</span></div>`;
+  r.flags.forEach(f => { h += `<div class="banner ${f.level === 'blocked' ? '' : 'info'}"${f.level === 'review' ? ' style="background:var(--warn-bg);color:var(--warn)"' : ''}>${ico(f.level === 'blocked' ? 'octagon-x' : f.level === 'review' ? 'triangle-alert' : 'info')}<span>${esc(f.text)}</span></div>`; });
+  return h;
+}
+function partProps() {
+  const p = S.part; const P = (h) => h.replaceAll('data-k=', 'data-p=');
+  return pHead('package', 't-part', 'Detal', false) + `<div class="p-sec"><b>Detal</b>
+    <div class="prow"><label for="p-name">Nazwa</label><div class="ctl"><input class="txt" id="p-name" data-p="name" value="${esc(p.name)}"></div></div>
+    ${selRow('p-mat', 'Materiał', 'mat', Object.entries(MAT).map(([k, m]) => [k, `${m.name} · ISO ${m.iso}`]), p.mat, 'data-p')}
+    ${P(numRow('p-qty', { k: 'qty', label: 'Partia', unit: 'szt.', step: 1 }, p.qty))}
+    ${P(numRow('p-res', { k: 'reserve', label: 'Rezerwa', unit: '%', step: 1 }, p.reserve))}</div>
+    <div class="p-sec"><b>Półfabrykat</b>
+    ${selRow('p-shape', 'Kształt', 'shape', [['box', 'Kostka'], ['cyl', 'Wałek']], p.shape, 'data-p')}
+    ${P(numRow('p-x', { k: 'x', label: p.shape === 'cyl' ? 'Średnica' : 'X', unit: 'mm' }, p.x))}
+    ${p.shape === 'box' ? P(numRow('p-y', { k: 'y', label: 'Y', unit: 'mm' }, p.y)) : ''}
+    ${P(numRow('p-z', { k: 'z', label: p.shape === 'cyl' ? 'Długość' : 'Z', unit: 'mm' }, p.z))}
+    <p class="hint">Materiał i półfabrykat ustawiają zielone wartości auto we wszystkich operacjach. Docelowo ten krok wypełnia import E_DATA z rysunku.</p></div>`;
+}
+function summaryProps(c) {
+  const rows = c.groups.map(g => `<tr class="go" data-goto="${g.step.id}"><td class="no">OP${g.no}</td><td>${esc(g.step.name)}${g.step.type === 'setup' ? `<small>${MACH[g.step.params.machine].name}, ${g.ops.length} op.</small>` : ''}</td><td class="n">${g.step.type === 'coop' ? `${n(g.days)} dni` : clock(g.unit)}</td><td class="n">${money(g.costUnit)}</td></tr>`).join('');
+  return pHead('flag', 't-feature', 'Podsumowanie', false) + `
+    ${c.tot.blocked ? `<div class="p-sec"><div class="banner">${ico('octagon-x')}<span>${c.tot.blocked} błędy blokują wycenę. Popraw czerwone kroki na marszrucie.</span></div></div>` : ''}
+    <div class="p-sec"><b>Na sztukę</b><div class="kv big"><span>Koszt</span><span>${money(c.tot.cost)}</span></div><div class="kv"><span>Czas</span><span>${clock(c.tot.unit)}</span></div><div class="kv"><span>Kooperacje</span><span>${n(c.tot.days)} dni</span></div></div>
+    <div class="p-sec"><b>Partia ${n(S.part.qty)} szt.</b><div class="kv"><span>TPZ wszystkich zamocowań</span><span>${hours(c.tot.tpz)}</span></div><div class="kv"><span>Produkcja</span><span>${hours(S.part.qty * c.tot.unit)}</span></div><div class="kv"><span>Razem</span><span>${hours(c.tot.batch)}</span></div><div class="kv"><span>Koszt partii</span><span>${money(c.tot.cost * S.part.qty)}</span></div></div>
+    <div class="p-sec"><b>Kroki</b><table class="tbl"><tbody>${rows}</tbody><tfoot><tr><td></td><td>Razem</td><td class="n">${clock(c.tot.unit)}</td><td class="n">${money(c.tot.cost)}</td></tr></tfoot></table></div>
+    <div class="p-sec"><p class="hint">Prototyp liczy uproszczonymi wzorami. W aplikacji kafelki liczy istniejący silnik z src/engine: rejestr formuł, profil warsztatu, kalibracja.</p></div>`;
+}
+
+// ───────── Render all ─────────
+let C;
+function renderAll() { C = compute(); renderTop(C); renderSide(C); renderCanvas(C); renderAsk(C); renderProps(C); icons(); }
+function renderLive() { C = compute(); renderTop(C); renderSide(C); renderCanvas(C); renderAsk(C); const r = document.getElementById('result'); const s = S.steps.find(x => x.id === S.sel); if (r && s) r.innerHTML = resultHtml(s, C); icons(); }
+function icons() { try { window.lucide && lucide.createIcons(); } catch (e) { } }
+
+// ───────── Akcje ─────────
+function makeNew(key) { return key.startsWith('op:') ? op(key.slice(3), {}) : st(key); }
+function insertAt(i, step) { S.steps.splice(i, 0, step); S.sel = step.id; S.addAt = null; renderAll(); }
+function moveTo(id, to) { const from = S.steps.findIndex(s => s.id === id); if (from < 0) return; const [s] = S.steps.splice(from, 1); if (from < to) to--; S.steps.splice(to, 0, s); renderAll(); }
+function closeMenu() { if (S.addAt !== null) { S.addAt = null; renderCanvas(C); icons(); } }
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-dismiss],[data-plus],[data-add],[data-add-direct],[data-new],[data-tpl],[data-clear],[data-confirm],[data-cancel],[data-sugg],[data-id],[data-close],[data-goto],[data-move],[data-dup],[data-del]');
+  if (!t) { if (!e.target.closest('.menu')) closeMenu(); return; }
+  const d = t.dataset;
+  if (d.dismiss) { e.stopPropagation(); S.dismissed.add(d.dismiss); return renderAll(); }
+  if (d.plus !== undefined) { e.stopPropagation(); const i = +d.plus; S.addAt = S.addAt === i ? null : i; renderCanvas(C); icons(); const m = document.querySelector('.menu .row'); m && m.focus(); return; }
+  if (d.add) return insertAt(S.addAt ?? S.steps.length, makeNew(d.add));
+  if (d.addDirect) return insertAt(0, makeNew(d.addDirect));
+  if (d.new) { const i = S.steps.findIndex(s => s.id === S.sel); return insertAt(i >= 0 ? i + 1 : S.steps.length, makeNew(d.new)); }
+  if (d.tpl) return S.steps.length ? confirmBox(d.tpl) : loadTemplate(d.tpl);
+  if (d.clear !== undefined) return S.steps.length ? confirmBox('') : clearAll();
+  if (d.confirm !== undefined) { document.getElementById('modal').innerHTML = ''; return d.confirm ? loadTemplate(d.confirm) : clearAll(); }
+  if (d.cancel !== undefined) { document.getElementById('modal').innerHTML = ''; return; }
+  if (d.sugg) { const g = C.sugg.find(x => x.id === d.sugg); S.dismissed.add(g.id); return insertAt(g.after + 1, g.add()); }
+  if (d.close !== undefined) { S.sel = null; return renderAll(); }
+  if (d.goto) { S.sel = d.goto; return renderAll(); }
+  if (d.id) { S.sel = d.id === 'summary' ? null : d.id; S.addAt = null; return renderAll(); }
+  const i = S.steps.findIndex(s => s.id === S.sel); if (i < 0) return;
+  if (d.move) { const j = i + +d.move; if (j < 0 || j >= S.steps.length) return; [S.steps[i], S.steps[j]] = [S.steps[j], S.steps[i]]; return renderAll(); }
+  if (d.dup !== undefined) { const s = S.steps[i]; return insertAt(i + 1, { ...s, id: uid(), name: `${s.name} (kopia)`, params: { ...s.params } }); }
+  if (d.del !== undefined) { S.steps.splice(i, 1); S.sel = null; return renderAll(); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeMenu(); document.getElementById('modal').innerHTML = ''; }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.card[role=button]')) { e.preventDefault(); e.target.click(); }
+});
+function confirmBox(key) {
+  const what = key ? `Szablon „${TEMPLATES[key].label}” podmieni detal i` : 'Pusta marszruta usunie';
+  document.getElementById('modal').innerHTML = `<div class="scrim"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-t"><h2 id="dlg-t">Zastąpić obecną marszrutę?</h2><p>${what} wszystkie ${S.steps.length} kroków.</p><div class="btns"><button class="btn" data-cancel>Anuluj</button><button class="btn white" data-confirm="${key}">Zastąp marszrutę</button></div></div></div>`;
+  document.querySelector('[data-confirm]').focus();
+}
+
+// Pola panelu: aktualizacja na żywo bez przerysowania pól
+const props = document.getElementById('props');
+props.addEventListener('input', e => {
+  const el = e.target;
+  if (el.id === 'f-name') { const s = S.steps.find(x => x.id === S.sel); s.name = el.value || 'Bez nazwy'; return renderLive(); }
+  if (el.dataset.p) {
+    const k = el.dataset.p;
+    if (k === 'name') S.part.name = el.value || 'Detal';
+    else if (el.dataset.sel) S.part[k] = el.value;
+    else { const v = parseFloat(el.value); if (Number.isFinite(v) && (v > 0 || (k === 'reserve' && v >= 0))) S.part[k] = v; }
+    if (k === 'shape') { if (el.value === 'cyl') S.part.y = S.part.x; return renderAll(); }
+    if (S.part.shape === 'cyl' && k === 'x') S.part.y = S.part.x;
+    return el.dataset.sel ? renderAll() : renderLive();
+  }
+  const k = el.dataset.k; if (!k) return; const s = S.steps.find(x => x.id === S.sel); if (!s) return;
+  if (el.dataset.sel) { s.params[k] = s.type === 'op' ? +el.value : el.value; return renderAll(); }
+  const v = parseFloat(el.value);
+  if (el.value === '' && s.type === 'op') { delete s.params[k]; el.classList.remove('set'); }
+  else if (Number.isFinite(v) && (v > 0 || k === 'adjust' || (v >= 0 && ['operator_s', 'tpz_min', 'price_pcs', 'days', 'time_min'].includes(k)))) { s.params[k] = v; if (s.type === 'op' && k !== 'adjust') el.classList.add('set'); }
+  renderLive();
+});
+props.addEventListener('change', e => { if (e.target.dataset.sel) e.target.dispatchEvent(new Event('input', { bubbles: true })); });
+
+// ───────── Przeciąganie ─────────
+let drag = null;
+document.addEventListener('dragstart', e => {
+  const el = e.target.closest('[data-new], .card[draggable][data-id]'); if (!el) return;
+  drag = el.dataset.new ? { kind: 'new', key: el.dataset.new } : { kind: 'move', id: el.dataset.id };
+  e.dataTransfer.effectAllowed = drag.kind === 'new' ? 'copy' : 'move';
+  try { e.dataTransfer.setData('text/plain', drag.key || drag.id); } catch (_) { }
+  S.addAt = null;
+  requestAnimationFrame(() => { document.body.classList.add('is-dragging'); if (drag && drag.id) el.classList.add('dragging'); });
+});
+document.addEventListener('dragend', () => { drag = null; document.body.classList.remove('is-dragging'); document.querySelectorAll('.dragging,.over').forEach(x => x.classList.remove('dragging', 'over')); });
+const flow = document.getElementById('flow');
+flow.addEventListener('dragover', e => {
+  if (!drag) return; const c = e.target.closest('.conn[data-at]');
+  document.querySelectorAll('.conn.over').forEach(x => x !== c && x.classList.remove('over'));
+  if (!c) return; e.preventDefault(); c.classList.add('over');
+});
+flow.addEventListener('drop', e => {
+  const c = e.target.closest('.conn[data-at]'); if (!c || !drag) return; e.preventDefault();
+  const at = +c.dataset.at; const d = drag; drag = null; document.body.classList.remove('is-dragging');
+  if (d.kind === 'new') insertAt(at, makeNew(d.key)); else moveTo(d.id, at);
+});
+
+loadTemplate('plyta');
+</script>
+
+</body>
+</html>
