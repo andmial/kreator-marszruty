@@ -20,6 +20,8 @@
   --card-edge: #2b2b2b;
   --line: #3d3d3d;
   --dot: #262626;
+  --group: #181818;
+  --rail: #6cb2ff66;
   --hover: #232323;
   --row-sel: #272727;
   --ctl: #2a2a2a;
@@ -160,7 +162,29 @@ svg.lucide { width: 16px; height: 16px; stroke-width: 1.6; flex: none; }
 .conn::after { content: ""; position: absolute; bottom: 6px; left: calc(50% - 4px); border: 4px solid transparent; border-top: 6px solid var(--line); border-bottom: 0; }
 body.is-dragging .conn { height: 80px; }
 .conn.over::before, .conn.over::after { opacity: 0; }
-.conn.over .drop { display: grid; }
+.conn-d.over .drop { display: grid; }
+
+/* grupa zamocowania: rodzic + operacje-dzieci na szynie */
+.step.g { width: min(448px, 100%); }
+.group { width: 100%; background: var(--group); border-radius: 16px; box-shadow: inset 0 0 0 1px var(--card-edge); padding: var(--s-xs) var(--s-xs) 0; }
+.group.bad { box-shadow: inset 0 0 0 1px var(--crit); }
+.step-in { position: relative; }
+.children { position: relative; margin-left: 22px; padding-left: 22px; }
+.children::before { content: ""; position: absolute; left: 0; top: 0; bottom: 18px; width: 2px; border-radius: 2px; background: var(--rail); }
+.kid { position: relative; }
+.kid::before { content: ""; position: absolute; left: -22px; top: 27px; width: 16px; height: 2px; background: var(--rail); }
+.kid::after { content: ""; position: absolute; left: -7px; top: 24px; border: 4px solid transparent; border-left: 6px solid var(--rail); border-right: 0; }
+.kid.add::before { top: 17px; }
+.kid.add::after { display: none; }
+.child-conn { position: relative; height: 10px; transition: height .15s ease; }
+body.is-dragging .child-conn { height: 44px; }
+.child-conn .drop { inset: 4px 0; }
+.opno { font-family: var(--mono); font-size: 11px; color: var(--t-setup-fg); flex: none; }
+.add-op { height: 36px; display: inline-flex; align-items: center; gap: var(--s-xs); padding: 0 var(--s-sm); border: 0; background: transparent; color: var(--fg-3); border-radius: var(--r-md); font-size: 12px; }
+.add-op:hover { color: var(--fg); background: var(--hover); }
+.add-op svg { width: 14px; height: 14px; }
+.group-f { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--s-2xs) var(--s-sm); margin-top: var(--s-2xs); padding: var(--s-sm) var(--s-sm) var(--s-sm) 44px; border-top: 1px solid var(--card-edge); color: var(--fg-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+.group-f b { color: var(--fg-2); font-weight: 500; font-family: var(--mono); }
 .drop { display: none; position: absolute; inset: 10px 0; border: 1px dashed var(--blue); border-radius: var(--r-lg); background: #2b8cf014; color: var(--link); font-size: 12px; place-items: center; }
 
 .menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 296px; max-width: calc(100vw - 32px); max-height: 360px; overflow-y: auto; background: var(--frame-head); border-radius: var(--r-lg); box-shadow: var(--sh-pop); padding: var(--s-xs); }
@@ -432,9 +456,11 @@ const TEMPLATES = {
 };
 
 // ───────── Stan ─────────
-const S = { part: null, steps: [], sel: null, dismissed: new Set(), addAt: null };
-function loadTemplate(key) { const t = TEMPLATES[key].build(); S.part = t.part; S.steps = t.steps; S.sel = null; S.dismissed = new Set(); S.addAt = null; renderAll(); }
-function clearAll() { S.steps = []; S.sel = null; S.dismissed = new Set(); S.addAt = null; renderAll(); }
+const S = { part: null, steps: [], sel: null, dismissed: new Set(), addAt: null, addKey: null, addOps: false, collapsed: new Set() };
+function resetUi() { S.sel = null; S.dismissed = new Set(); S.addAt = null; S.addKey = null; S.collapsed = new Set(); }
+function loadTemplate(key) { const t = TEMPLATES[key].build(); S.part = t.part; S.steps = t.steps; resetUi(); renderAll(); }
+function clearAll() { S.steps = []; resetUi(); renderAll(); }
+const plural = (k, one, few, many) => k === 1 ? one : (k % 10 >= 2 && k % 10 <= 4 && (k % 100 < 12 || k % 100 > 14)) ? few : many;
 
 // ───────── Formatowanie ─────────
 const n = (v, d = 0) => Number.isFinite(v) ? v.toLocaleString('pl-PL', { maximumFractionDigits: d, minimumFractionDigits: 0 }) : '–';
@@ -530,7 +556,7 @@ function renderSide(c) {
 // ───────── Render: canvas ─────────
 function catalogueMenu() {
   const item = (key, icon, tone, label, hint) => `<button class="row" data-add="${key}" role="menuitem"><span class="tile sm ${tone}">${ico(icon)}</span><span class="lbl">${label}</span>${hint ? `<small>${hint}</small>` : ''}</button>`;
-  let h = `<div class="grp-h">Kroki marszruty</div>` + Object.entries(STEP).map(([k, d]) => item(k, d.icon, d.tone, d.label, d.hint)).join('');
+  let h = S.addOps ? '' : `<div class="grp-h">Kroki marszruty</div>` + Object.entries(STEP).map(([k, d]) => item(k, d.icon, d.tone, d.label, d.hint)).join('');
   Object.entries(STAGE).forEach(([sk, sl]) => { h += `<div class="grp-h">Obróbka ${sl.toLowerCase()}</div>` + Object.entries(OPS).filter(([, d]) => d.stage === sk).map(([k, d]) => item(`op:${k}`, d.icon, `t-${sk}`, d.label, d.proc === 'lathe' ? 'tokarka' : '')).join(''); });
   return `<div class="menu" role="menu">${h}</div>`;
 }
@@ -545,38 +571,68 @@ function bodyHtml(s, r) {
   const flags = r.flags.map(f => `<div class="flag ${f.level}">${ico(f.level === 'blocked' ? 'octagon-x' : f.level === 'review' ? 'triangle-alert' : 'info')}<span>${esc(f.text)}</span></div>`).join('');
   return `<div class="card-b"><p>${txt}</p>${flags}</div>`;
 }
-function stepHtml(s, i, c) {
+// Karta kroku. `child` = operacja wewnątrz grupy zamocowania.
+function cardHtml(s, i, c, child) {
   const r = c.res[s.id]; const sel = S.sel === s.id; const bad = r.flags.some(f => f.level === 'blocked');
-  const pillCls = bad ? 'bad' : s.type === 'setup' ? 'setup' : '';
-  const pill = s.type === 'op' ? `${r.no} · ${STAGE[OPS[s.kind].stage]}` : `${r.no} · ${STEP[s.type].label}`;
-  let suffix = '';
-  if (s.type === 'setup') suffix = ` na ${MACH[s.params.machine].name}`;
+  const suffix = s.type === 'setup' ? ` na ${MACH[s.params.machine].name}` : '';
   const time = s.type === 'coop' ? `${n(s.params.days)} dni` : clock(r.min);
-  const open = S.addAt === i + 1;
-  return `<div class="step"><span class="pill ${pillCls}">${pill}</span>
-    <div class="card${sel ? ' sel' : ''}${bad ? ' bad' : ''}" role="button" tabindex="0" aria-pressed="${sel}" draggable="true" data-id="${s.id}">
+  const key = `card:${s.id}`; const open = S.addKey === key;
+  const opsOnly = child || s.type === 'setup';
+  const col = S.collapsed.has(s.id);
+  const toggle = s.type === 'setup' ? `<button class="plus" data-collapse="${s.id}" aria-label="${col ? 'Rozwiń' : 'Zwiń'} operacje ${r.no}" aria-expanded="${!col}">${ico(col ? 'chevron-right' : 'chevron-down')}</button>` : '';
+  const plusLbl = s.type === 'setup' ? `Dodaj pierwszą operację do ${r.no}` : child ? `Dodaj operację po: ${s.name}` : `Dodaj krok po: ${s.name}`;
+  return `<div class="card${sel ? ' sel' : ''}${bad ? ' bad' : ''}" role="button" tabindex="0" aria-pressed="${sel}" draggable="true" data-id="${s.id}">
       <span class="grip-h" aria-hidden="true">${ico('grip-vertical')}</span>
-      <div class="card-h"><span class="tile ${toneOf(s)}">${ico(iconOf(s))}</span><span class="card-t"><b>${esc(s.name)}</b>${esc(suffix)}</span><span class="time">${time}</span>
-      <button class="plus" data-plus="${i + 1}" aria-label="Dodaj krok po: ${esc(s.name)}" aria-expanded="${open}" aria-haspopup="menu">${ico('plus')}</button></div>
+      <div class="card-h">${child ? `<span class="opno" title="${STAGE[OPS[s.kind].stage]}">${r.no.slice(2)}</span>` : ''}<span class="tile ${toneOf(s)}">${ico(iconOf(s))}</span><span class="card-t"><b>${esc(s.name)}</b>${esc(suffix)}</span><span class="time">${time}</span>${toggle}
+      <button class="plus" data-plus="${i + 1}" data-key="${key}" data-ops="${opsOnly ? 1 : ''}" aria-label="${esc(plusLbl)}" aria-expanded="${open}" aria-haspopup="menu">${ico('plus')}</button></div>
       ${bodyHtml(s, r)}
-    </div>${open ? catalogueMenu() : ''}</div>`;
+    </div>${open ? catalogueMenu() : ''}`;
 }
-function connHtml(at) { return `<div class="conn" data-at="${at}"><span class="drop">Upuść tutaj</span></div>`; }
+// Krok najwyższego poziomu (praca ręczna, kooperacja, kontrola, operacja poza zamocowaniem).
+function stepHtml(s, i, c) {
+  const r = c.res[s.id]; const bad = r.flags.some(f => f.level === 'blocked');
+  const pill = s.type === 'op' ? `${r.no} · poza zamocowaniem` : `${r.no} · ${STEP[s.type].label}`;
+  return `<div class="step"><span class="pill ${bad ? 'bad' : ''}">${pill}</span>${cardHtml(s, i, c, false)}</div>`;
+}
+// Zamocowanie jako kontener: karta rodzica, pod nią operacje-dzieci na szynie, stopka z sumą.
+function groupHtml(s, i, end, c) {
+  const r = c.res[s.id], g = r.g, col = S.collapsed.has(s.id);
+  const bad = [r.flags, ...g.ops.map(o => c.res[o.id].flags)].flat().some(f => f.level === 'blocked');
+  const k = g.ops.length; const opsWord = plural(k, 'operacja', 'operacje', 'operacji');
+  let kids = '';
+  if (col) kids = `<div class="kid add"><button class="add-op" data-collapse="${s.id}" aria-expanded="false">${ico('chevron-right')}${k} ${opsWord} zwinięte. Rozwiń</button></div>`;
+  else {
+    for (let j = i + 1; j < end; j++) kids += `<div class="child-conn conn-d" data-at="${j}"><span class="drop">Upuść tutaj</span></div><div class="kid">${cardHtml(S.steps[j], j, c, true)}</div>`;
+    const key = `foot:${s.id}`;
+    kids += `<div class="child-conn conn-d" data-at="${end}"><span class="drop">Upuść tutaj</span></div><div class="kid add"><button class="add-op" data-plus="${end}" data-key="${key}" data-ops="1" aria-expanded="${S.addKey === key}" aria-haspopup="menu">${ico('plus')}Dodaj operację do ${r.no}</button>${S.addKey === key ? catalogueMenu() : ''}</div>`;
+  }
+  return `<div class="step g"><span class="pill ${bad ? 'bad' : 'setup'}">${r.no} · Zamocowanie</span>
+    <div class="group${bad ? ' bad' : ''}"><div class="step-in">${cardHtml(s, i, c, false)}</div>
+      <div class="children" role="group" aria-label="Operacje ${r.no}">${kids}</div>
+      <div class="group-f"><span>${k} ${opsWord} · ${g.tools} ${plural(g.tools, 'narzędzie', 'narzędzia', 'narzędzi')}</span><span>skrawanie <b>${clock(g.cut)}</b> · wymiany <b>${clock(g.atc)}</b></span></div>
+    </div></div>`;
+}
+function connHtml(at) { return `<div class="conn conn-d" data-at="${at}"><span class="drop">Upuść tutaj</span></div>`; }
 function renderCanvas(c) {
   const p = S.part, mat = MAT[p.mat];
   const dims = p.shape === 'cyl' ? `Ø${n(p.x)} × ${n(p.z)} mm` : `${n(p.x)} × ${n(p.y)} × ${n(p.z)} mm`;
   document.getElementById('frame-h').innerHTML = `<span class="ic">${ico('git-branch')}</span><b>${esc(p.name)}</b><span class="rec" style="background:${c.tot.blocked ? 'var(--crit)' : 'var(--ok)'}" title="${c.tot.blocked ? 'Marszruta ma błędy' : 'Marszruta gotowa do wyceny'}"></span><span class="spacer"></span><span class="legend"><span><i style="background:var(--link)"></i>wpisane</span><span><i style="background:var(--auto)"></i>auto z materiału</span></span>`;
-  const startOpen = S.addAt === 0;
+  const startOpen = S.addKey === 'start';
   let h = `<div class="step"><span class="pill trig">Detal</span>
     <div class="card${S.sel === 'part' ? ' sel' : ''}" role="button" tabindex="0" data-id="part">
       <div class="card-h"><span class="tile t-part">${ico('package')}</span><span class="card-t"><b>${esc(p.name)}</b> ${n(p.qty)} szt.</span>
-      <button class="plus" data-plus="0" aria-label="Dodaj pierwszy krok" aria-expanded="${startOpen}" aria-haspopup="menu">${ico('plus')}</button></div>
+      <button class="plus" data-plus="0" data-key="start" data-ops="" aria-label="Dodaj pierwszy krok" aria-expanded="${startOpen}" aria-haspopup="menu">${ico('plus')}</button></div>
       <div class="card-b"><p>Materiał <span class="v-set">${esc(mat.name)}</span>, półfabrykat <span class="v-set">${dims}</span>, rezerwa <span class="v-set">${n(p.reserve)}%</span></p></div>
     </div>${startOpen ? catalogueMenu() : ''}</div>`;
   if (!S.steps.length) {
     h += connHtml(0) + `<div class="empty"><span class="tile t-setup">${ico('crosshair')}</span><b>Brak kroków</b><p>Zacznij od zamocowania. Operacje pod nim dziedziczą maszynę i TPZ.</p><div class="btns" style="justify-content:center"><button class="btn white" data-add-direct="setup">${ico('plus')}Dodaj zamocowanie</button></div></div>`;
   } else {
-    S.steps.forEach((s, i) => { h += connHtml(i) + stepHtml(s, i, c); });
+    let i = 0;
+    while (i < S.steps.length) {
+      const s = S.steps[i]; h += connHtml(i);
+      if (s.type === 'setup') { let end = i + 1; while (end < S.steps.length && S.steps[end].type === 'op') end++; h += groupHtml(s, i, end, c); i = end; }
+      else { h += stepHtml(s, i, c); i++; }
+    }
     h += connHtml(S.steps.length);
     h += `<div class="step"><span class="pill ${c.tot.blocked ? 'bad' : 'trig'}">Wynik</span><div class="card${S.sel === null ? ' sel' : ''}" role="button" tabindex="0" data-id="summary"><div class="card-h"><span class="tile ${c.tot.blocked ? 't-coop' : 't-feature'}">${ico(c.tot.blocked ? 'octagon-x' : 'flag')}</span><span class="card-t">${c.tot.blocked ? `<b>${c.tot.blocked} błędy</b> blokują wycenę` : `<b>${money(c.tot.cost)}</b> za sztukę`}</span><span class="time">${clock(c.tot.unit)}</span></div></div></div>`;
   }
@@ -677,16 +733,20 @@ function icons() { try { window.lucide && lucide.createIcons(); } catch (e) { } 
 
 // ───────── Akcje ─────────
 function makeNew(key) { return key.startsWith('op:') ? op(key.slice(3), {}) : st(key); }
-function insertAt(i, step) { S.steps.splice(i, 0, step); S.sel = step.id; S.addAt = null; renderAll(); }
+function insertAt(i, step) { S.steps.splice(i, 0, step); S.sel = step.id; S.addAt = null; S.addKey = null; renderAll(); }
 function moveTo(id, to) { const from = S.steps.findIndex(s => s.id === id); if (from < 0) return; const [s] = S.steps.splice(from, 1); if (from < to) to--; S.steps.splice(to, 0, s); renderAll(); }
-function closeMenu() { if (S.addAt !== null) { S.addAt = null; renderCanvas(C); icons(); } }
+function closeMenu() { if (S.addKey !== null) { S.addAt = null; S.addKey = null; renderCanvas(C); icons(); } }
 
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-dismiss],[data-plus],[data-add],[data-add-direct],[data-new],[data-tpl],[data-clear],[data-confirm],[data-cancel],[data-sugg],[data-id],[data-close],[data-goto],[data-move],[data-dup],[data-del]');
+  const t = e.target.closest('[data-dismiss],[data-collapse],[data-plus],[data-add],[data-add-direct],[data-new],[data-tpl],[data-clear],[data-confirm],[data-cancel],[data-sugg],[data-id],[data-close],[data-goto],[data-move],[data-dup],[data-del]');
   if (!t) { if (!e.target.closest('.menu')) closeMenu(); return; }
   const d = t.dataset;
   if (d.dismiss) { e.stopPropagation(); S.dismissed.add(d.dismiss); return renderAll(); }
-  if (d.plus !== undefined) { e.stopPropagation(); const i = +d.plus; S.addAt = S.addAt === i ? null : i; renderCanvas(C); icons(); const m = document.querySelector('.menu .row'); m && m.focus(); return; }
+  if (d.collapse) { S.collapsed.has(d.collapse) ? S.collapsed.delete(d.collapse) : S.collapsed.add(d.collapse); S.addKey = null; S.addAt = null; renderCanvas(C); icons(); return; }
+  if (d.plus !== undefined) {
+    if (S.addKey === d.key) { S.addKey = null; S.addAt = null; } else { S.addKey = d.key; S.addAt = +d.plus; S.addOps = !!d.ops; }
+    renderCanvas(C); icons(); const m = document.querySelector('.menu .row'); m && m.focus(); return;
+  }
   if (d.add) return insertAt(S.addAt ?? S.steps.length, makeNew(d.add));
   if (d.addDirect) return insertAt(0, makeNew(d.addDirect));
   if (d.new) { const i = S.steps.findIndex(s => s.id === S.sel); return insertAt(i >= 0 ? i + 1 : S.steps.length, makeNew(d.new)); }
@@ -743,18 +803,18 @@ document.addEventListener('dragstart', e => {
   drag = el.dataset.new ? { kind: 'new', key: el.dataset.new } : { kind: 'move', id: el.dataset.id };
   e.dataTransfer.effectAllowed = drag.kind === 'new' ? 'copy' : 'move';
   try { e.dataTransfer.setData('text/plain', drag.key || drag.id); } catch (_) { }
-  S.addAt = null;
+  S.addAt = null; S.addKey = null;
   requestAnimationFrame(() => { document.body.classList.add('is-dragging'); if (drag && drag.id) el.classList.add('dragging'); });
 });
 document.addEventListener('dragend', () => { drag = null; document.body.classList.remove('is-dragging'); document.querySelectorAll('.dragging,.over').forEach(x => x.classList.remove('dragging', 'over')); });
 const flow = document.getElementById('flow');
 flow.addEventListener('dragover', e => {
-  if (!drag) return; const c = e.target.closest('.conn[data-at]');
-  document.querySelectorAll('.conn.over').forEach(x => x !== c && x.classList.remove('over'));
+  if (!drag) return; const c = e.target.closest('.conn-d[data-at]');
+  document.querySelectorAll('.conn-d.over').forEach(x => x !== c && x.classList.remove('over'));
   if (!c) return; e.preventDefault(); c.classList.add('over');
 });
 flow.addEventListener('drop', e => {
-  const c = e.target.closest('.conn[data-at]'); if (!c || !drag) return; e.preventDefault();
+  const c = e.target.closest('.conn-d[data-at]'); if (!c || !drag) return; e.preventDefault();
   const at = +c.dataset.at; const d = drag; drag = null; document.body.classList.remove('is-dragging');
   if (d.kind === 'new') insertAt(at, makeNew(d.key)); else moveTo(d.id, at);
 });
